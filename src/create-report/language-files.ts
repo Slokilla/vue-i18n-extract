@@ -62,7 +62,7 @@ export function extractI18NLanguageFromLanguageFiles (languageFiles: SimpleFile[
   }, {});
 }
 
-export function writeMissingToLanguageFiles (parsedLanguageFiles: SimpleFile[], missingKeys: I18NItem[], dot: DotObject.Dot = Dot, noEmptyTranslation = '', missingTranslationString = ''): void {
+export function writeMissingToLanguageFiles (parsedLanguageFiles: SimpleFile[], missingKeys: I18NItem[], dot: DotObject.Dot = Dot, noEmptyTranslation = '', missingTranslationString = '', sort = false): void {
   parsedLanguageFiles.forEach(languageFile => {
     const languageFileContent = JSON.parse(languageFile.content);
 
@@ -73,11 +73,11 @@ export function writeMissingToLanguageFiles (parsedLanguageFiles: SimpleFile[], 
       }
     });
 
-    writeLanguageFile(languageFile, languageFileContent);
+    writeLanguageFile(languageFile, languageFileContent, sort);
   });
 }
 
-export function removeUnusedFromLanguageFiles (parsedLanguageFiles: SimpleFile[], unusedKeys: I18NItem[], dot: DotObject.Dot = Dot): void {
+export function removeUnusedFromLanguageFiles (parsedLanguageFiles: SimpleFile[], unusedKeys: I18NItem[], dot: DotObject.Dot = Dot, sort = false): void {
   parsedLanguageFiles.forEach(languageFile => {
     const languageFileContent = JSON.parse(languageFile.content);
 
@@ -87,11 +87,39 @@ export function removeUnusedFromLanguageFiles (parsedLanguageFiles: SimpleFile[]
       }
     });
 
-    writeLanguageFile(languageFile, languageFileContent);
+    writeLanguageFile(languageFile, languageFileContent, sort);
   });
 }
 
-function writeLanguageFile (languageFile: SimpleFile, newLanguageFileContent: unknown) {
+export function sortLanguageFiles (parsedLanguageFiles: SimpleFile[]): void {
+  parsedLanguageFiles.forEach(languageFile => {
+    writeLanguageFile(languageFile, JSON.parse(languageFile.content), true);
+  });
+}
+
+// Recursively sorts the keys of every object alphabetically. Arrays keep their
+// order since it is meaningful for vue-i18n (pluralization, lists).
+export function sortObjectKeys<T> (value: T): T {
+  if (Array.isArray(value)) {
+    return value.map(item => sortObjectKeys(item)) as unknown as T;
+  }
+
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  const unsorted = value as Record<string, unknown>;
+
+  return Object.keys(unsorted)
+    .sort((a, b) => a.localeCompare(b))
+    .reduce((accumulator: Record<string, unknown>, key) => {
+      accumulator[key] = sortObjectKeys(unsorted[key]);
+      return accumulator;
+    }, {}) as unknown as T;
+}
+
+function writeLanguageFile (languageFile: SimpleFile, languageFileContent: unknown, sort = false) {
+  const newLanguageFileContent = sort ? sortObjectKeys(languageFileContent) : languageFileContent;
   const fileExtension = languageFile.fileName.substring(languageFile.fileName.lastIndexOf('.') + 1);
     const filePath = languageFile.path;
     const stringifiedContent = JSON.stringify(newLanguageFileContent, null, 2);
@@ -102,7 +130,9 @@ function writeLanguageFile (languageFile: SimpleFile, newLanguageFileContent: un
       const jsFile = `module.exports = ${stringifiedContent}; \n`;
       fs.writeFileSync(filePath, jsFile);
     } else if (fileExtension === 'yaml' || fileExtension === 'yml') {
-      const yamlFile = yaml.dump(newLanguageFileContent);
+      // js-yaml folds lines at 80 columns by default, which turns a hand-written
+      // one-line-per-key catalog into folded blocks on every write.
+      const yamlFile = yaml.dump(newLanguageFileContent, { lineWidth: -1 });
       fs.writeFileSync(filePath, yamlFile);
     } else {
       throw new Error(`Language filetype of ${fileExtension} not supported.`)

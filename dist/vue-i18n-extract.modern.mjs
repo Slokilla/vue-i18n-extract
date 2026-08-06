@@ -34,6 +34,7 @@ var defaultConfig = {
   remove: false,
   ci: false,
   separator: '.',
+  sort: false,
   noEmptyTranslation: '',
   missingTranslationString: ''
 };
@@ -227,7 +228,7 @@ function extractI18NLanguageFromLanguageFiles(languageFiles, dot = Dot) {
     return accumulator;
   }, {});
 }
-function writeMissingToLanguageFiles(parsedLanguageFiles, missingKeys, dot = Dot, noEmptyTranslation = '', missingTranslationString = '') {
+function writeMissingToLanguageFiles(parsedLanguageFiles, missingKeys, dot = Dot, noEmptyTranslation = '', missingTranslationString = '', sort = false) {
   parsedLanguageFiles.forEach(languageFile => {
     const languageFileContent = JSON.parse(languageFile.content);
     missingKeys.forEach(item => {
@@ -236,10 +237,10 @@ function writeMissingToLanguageFiles(parsedLanguageFiles, missingKeys, dot = Dot
         dot.str(item.path, addDefaultTranslation ? item.path : missingTranslationString === 'null' ? null : missingTranslationString, languageFileContent);
       }
     });
-    writeLanguageFile(languageFile, languageFileContent);
+    writeLanguageFile(languageFile, languageFileContent, sort);
   });
 }
-function removeUnusedFromLanguageFiles(parsedLanguageFiles, unusedKeys, dot = Dot) {
+function removeUnusedFromLanguageFiles(parsedLanguageFiles, unusedKeys, dot = Dot, sort = false) {
   parsedLanguageFiles.forEach(languageFile => {
     const languageFileContent = JSON.parse(languageFile.content);
     unusedKeys.forEach(item => {
@@ -247,11 +248,34 @@ function removeUnusedFromLanguageFiles(parsedLanguageFiles, unusedKeys, dot = Do
         dot.delete(item.path, languageFileContent);
       }
     });
-    writeLanguageFile(languageFile, languageFileContent);
+    writeLanguageFile(languageFile, languageFileContent, sort);
   });
 }
+function sortLanguageFiles(parsedLanguageFiles) {
+  parsedLanguageFiles.forEach(languageFile => {
+    writeLanguageFile(languageFile, JSON.parse(languageFile.content), true);
+  });
+} // Recursively sorts the keys of every object alphabetically. Arrays keep their
+// order since it is meaningful for vue-i18n (pluralization, lists).
 
-function writeLanguageFile(languageFile, newLanguageFileContent) {
+function sortObjectKeys(value) {
+  if (Array.isArray(value)) {
+    return value.map(item => sortObjectKeys(item));
+  }
+
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  const unsorted = value;
+  return Object.keys(unsorted).sort((a, b) => a.localeCompare(b)).reduce((accumulator, key) => {
+    accumulator[key] = sortObjectKeys(unsorted[key]);
+    return accumulator;
+  }, {});
+}
+
+function writeLanguageFile(languageFile, languageFileContent, sort = false) {
+  const newLanguageFileContent = sort ? sortObjectKeys(languageFileContent) : languageFileContent;
   const fileExtension = languageFile.fileName.substring(languageFile.fileName.lastIndexOf('.') + 1);
   const filePath = languageFile.path;
   const stringifiedContent = JSON.stringify(newLanguageFileContent, null, 2);
@@ -262,7 +286,11 @@ function writeLanguageFile(languageFile, newLanguageFileContent) {
     const jsFile = `module.exports = ${stringifiedContent}; \n`;
     fs.writeFileSync(filePath, jsFile);
   } else if (fileExtension === 'yaml' || fileExtension === 'yml') {
-    const yamlFile = yaml.dump(newLanguageFileContent);
+    // js-yaml folds lines at 80 columns by default, which turns a hand-written
+    // one-line-per-key catalog into folded blocks on every write.
+    const yamlFile = yaml.dump(newLanguageFileContent, {
+      lineWidth: -1
+    });
     fs.writeFileSync(filePath, yamlFile);
   } else {
     throw new Error(`Language filetype of ${fileExtension} not supported.`);
@@ -343,6 +371,7 @@ async function createI18NReport(options) {
     exclude = [],
     ci,
     separator,
+    sort = false,
     noEmptyTranslation = '',
     missingTranslationString = '',
     detect = [DetectionType.Missing, DetectionType.Unused, DetectionType.Dynamic]
@@ -372,14 +401,24 @@ async function createI18NReport(options) {
     console.info(`\nThe report has been has been saved to ${output}`);
   }
 
+  let languageFilesWereWritten = false;
+
   if (remove && report.unusedKeys.length) {
-    removeUnusedFromLanguageFiles(languageFiles, report.unusedKeys, dot);
+    removeUnusedFromLanguageFiles(languageFiles, report.unusedKeys, dot, sort);
+    languageFilesWereWritten = true;
     console.info('\nThe unused keys have been removed from your language files.');
   }
 
   if (add && report.missingKeys.length) {
-    writeMissingToLanguageFiles(languageFiles, report.missingKeys, dot, noEmptyTranslation, missingTranslationString);
+    writeMissingToLanguageFiles(languageFiles, report.missingKeys, dot, noEmptyTranslation, missingTranslationString, sort);
+    languageFilesWereWritten = true;
     console.info('\nThe missing keys have been added to your language files.');
+  } // Nothing else triggered a write, so sorting has to write the files itself.
+
+
+  if (sort && !languageFilesWereWritten) {
+    sortLanguageFiles(languageFiles);
+    console.info('\nYour language files have been sorted alphabetically.');
   }
 
   if (ci && report.missingKeys.length) {
@@ -402,5 +441,5 @@ process.on('unhandledRejection', err => {
   process.exit(1);
 });
 
-export { DetectionType, createI18NReport, extractI18NItemsFromVueFiles, extractI18NLanguageFromLanguageFiles, extractI18NReport, initCommand, parseVueFiles, parselanguageFiles, readLanguageFiles, readVueFiles, removeUnusedFromLanguageFiles, resolveConfig, writeMissingToLanguageFiles, writeReportToFile };
+export { DetectionType, createI18NReport, extractI18NItemsFromVueFiles, extractI18NLanguageFromLanguageFiles, extractI18NReport, initCommand, parseVueFiles, parselanguageFiles, readLanguageFiles, readVueFiles, removeUnusedFromLanguageFiles, resolveConfig, sortLanguageFiles, sortObjectKeys, writeMissingToLanguageFiles, writeReportToFile };
 //# sourceMappingURL=vue-i18n-extract.modern.mjs.map

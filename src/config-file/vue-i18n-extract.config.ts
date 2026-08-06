@@ -8,6 +8,7 @@ export default {
   remove: false,
   ci: false,
   separator: '.',
+  sort: false,
   noEmptyTranslation: '',
   missingTranslationString: '',
 };

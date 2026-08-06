@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import dot from 'dot-object';
-import { readLanguageFiles, writeMissingToLanguageFiles, removeUnusedFromLanguageFiles, parselanguageFiles } from '@/create-report/language-files';
+import { readLanguageFiles, writeMissingToLanguageFiles, removeUnusedFromLanguageFiles, parselanguageFiles, sortLanguageFiles, sortObjectKeys } from '@/create-report/language-files';
 import { expectedFromParsedLanguageFiles, expectedI18NReport } from '../../fixtures/expected-values';
 import { languageFiles } from '../../fixtures/resolved-sources';
 
@@ -70,6 +70,57 @@ describe('file: create-report/language-files', () => {
       expect(dotDeleteSpy).toHaveBeenCalledTimes(7);
       expect(writeFileSyncSpy).toHaveBeenCalledTimes(3);
       expect(writeFileSyncSpy.mock.calls[0][1]).not.toContain('unused');
+    });
+  });
+
+  describe('function: sortObjectKeys', () => {
+    it('Sorts the keys of nested objects alphabetically', () => {
+      const sorted = sortObjectKeys({
+        header: { title2: 'Title 2', title: 'Title' },
+        content: { link: { b: 'Here', a: 'Click' } },
+      });
+
+      expect(JSON.stringify(sorted)).toBe(JSON.stringify({
+        content: { link: { a: 'Click', b: 'Here' } },
+        header: { title: 'Title', title2: 'Title 2' },
+      }));
+    });
+
+    it('Keeps the order of arrays but sorts the objects they contain', () => {
+      const sorted = sortObjectKeys({ plurals: ['two', 'one', { b: 2, a: 1 }] });
+
+      expect(JSON.stringify(sorted)).toBe(JSON.stringify({
+        plurals: ['two', 'one', { a: 1, b: 2 }],
+      }));
+    });
+
+    it('Leaves primitives and null untouched', () => {
+      expect(sortObjectKeys(null)).toBe(null);
+      expect(sortObjectKeys('a string')).toBe('a string');
+      expect(sortObjectKeys(42)).toBe(42);
+    });
+  });
+
+  describe('function: sortLanguageFiles', () => {
+    it('Writes every language file back with its keys sorted', () => {
+      const writeFileSyncSpy = jest.spyOn(fs, 'writeFileSync');
+      writeFileSyncSpy.mockImplementation(() => jest.fn());
+      jest.resetAllMocks();
+
+      const parsedLanguageFiles = readLanguageFiles(languageFiles);
+      sortLanguageFiles(parsedLanguageFiles);
+
+      expect(writeFileSyncSpy).toHaveBeenCalledTimes(parsedLanguageFiles.length);
+
+      writeFileSyncSpy.mock.calls.forEach(([filePath, fileContent]) => {
+        // The yaml fixture is dumped as yaml, the others as JSON.
+        if (String(filePath).endsWith('.yaml') || String(filePath).endsWith('.yml')) return;
+
+        const topLevelKeys = Object.keys(JSON.parse(
+          String(fileContent).replace(/^module\.exports = /, '').replace(/; \n$/, ''),
+        ));
+        expect(topLevelKeys).toEqual([...topLevelKeys].sort((a, b) => a.localeCompare(b)));
+      });
     });
   });
 })

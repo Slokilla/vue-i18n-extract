@@ -34,6 +34,7 @@
   - [`remove`](#remove)
   - [`ci`](#ci)
   - [`separator`](#separator)
+  - [`sort`](#sort)
   - [`exclude`](#exclude)
   - [`noEmptyTranslation`](#noemptytranslation)
   - [`missingtranslationstring`](#missingtranslationstring)
@@ -171,6 +172,18 @@ You can generate a default configuration file using `npx vue-i18n-extract init` 
 * Default: `'.'`
 * Type: `string`
 * Description: Changes the default separator used in translation keys for nested translation paths.
+
+### `sort`
+
+* Name: `sort`
+* CLI argument: `--sort`
+* Required: No
+* Default: `false`
+* Type: `boolean`
+* Description: Sorts the keys of your language files alphabetically, at every level of nesting. Arrays keep their original order, since it is meaningful to `vue-i18n` (pluralization, lists). When combined with [`add`](#add) or [`remove`](#remove), the files are sorted as they are rewritten; used on its own, it rewrites your language files with nothing but the sorting applied.
+* Examples:
+  * Configuration option: `sort: true`
+  * CLI argument: `--sort`
 
 ### `exclude`
 

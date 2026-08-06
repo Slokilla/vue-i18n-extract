@@ -36,6 +36,10 @@ cli
     'Use if you want to override the separator used when parsing locale identifiers. Default is `.`'
    )
   .option(
+    '--sort',
+    '[boolean] Use if you want to sort the keys of your language files alphabetically.',
+   )
+  .option(
     '--exclude <key>',
     'Use if you want to exclude a key. It can be used multiple times to exclude any amount of keys on the output'
    )

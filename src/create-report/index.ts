@@ -1,7 +1,7 @@
 import path from 'path';
 import { ReportOptions, I18NReport, DetectionType } from '../types';
 import { readVueFiles, extractI18NItemsFromVueFiles } from './vue-files';
-import { readLanguageFiles, extractI18NLanguageFromLanguageFiles, removeUnusedFromLanguageFiles, writeMissingToLanguageFiles } from './language-files';
+import { readLanguageFiles, extractI18NLanguageFromLanguageFiles, removeUnusedFromLanguageFiles, writeMissingToLanguageFiles, sortLanguageFiles } from './language-files';
 import { extractI18NReport,  writeReportToFile } from './report';
 import Dot from 'dot-object';
 
@@ -15,6 +15,7 @@ export async function createI18NReport (options: ReportOptions): Promise<I18NRep
     exclude = [],
     ci,
     separator,
+    sort = false,
     noEmptyTranslation = '',
     missingTranslationString = '',
     detect = [DetectionType.Missing, DetectionType.Unused, DetectionType.Dynamic]
@@ -50,14 +51,24 @@ export async function createI18NReport (options: ReportOptions): Promise<I18NRep
     console.info(`\nThe report has been has been saved to ${output}`);
   }
 
+  let languageFilesWereWritten = false;
+
   if (remove && report.unusedKeys.length) {
-    removeUnusedFromLanguageFiles(languageFiles, report.unusedKeys, dot);
+    removeUnusedFromLanguageFiles(languageFiles, report.unusedKeys, dot, sort);
+    languageFilesWereWritten = true;
     console.info('\nThe unused keys have been removed from your language files.');
   }
 
   if (add && report.missingKeys.length) {
-    writeMissingToLanguageFiles(languageFiles, report.missingKeys, dot, noEmptyTranslation, missingTranslationString);
+    writeMissingToLanguageFiles(languageFiles, report.missingKeys, dot, noEmptyTranslation, missingTranslationString, sort);
+    languageFilesWereWritten = true;
     console.info('\nThe missing keys have been added to your language files.');
+  }
+
+  // Nothing else triggered a write, so sorting has to write the files itself.
+  if (sort && !languageFilesWereWritten) {
+    sortLanguageFiles(languageFiles);
+    console.info('\nYour language files have been sorted alphabetically.');
   }
 
   if (ci && report.missingKeys.length) {
