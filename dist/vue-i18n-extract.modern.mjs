@@ -255,6 +255,15 @@ function sortLanguageFiles(parsedLanguageFiles) {
   parsedLanguageFiles.forEach(languageFile => {
     writeLanguageFile(languageFile, JSON.parse(languageFile.content), true);
   });
+} // Read-only counterpart of sortLanguageFiles: reports the files whose contents differ
+// from what a sorted write would produce. Comparing the rendered output rather than the
+// key order alone keeps the answer honest — it is exactly `would --sort touch this file`.
+
+function findUnsortedLanguageFiles(parsedLanguageFiles) {
+  return parsedLanguageFiles.filter(languageFile => {
+    const sorted = renderLanguageFile(languageFile, sortObjectKeys(JSON.parse(languageFile.content)));
+    return fs.readFileSync(languageFile.path, 'utf8') !== sorted;
+  }).map(languageFile => languageFile.fileName);
 } // Recursively sorts the keys of every object alphabetically. Arrays keep their
 // order since it is meaningful for vue-i18n (pluralization, lists).
 
@@ -274,27 +283,28 @@ function sortObjectKeys(value) {
   }, {});
 }
 
-function writeLanguageFile(languageFile, languageFileContent, sort = false) {
-  const newLanguageFileContent = sort ? sortObjectKeys(languageFileContent) : languageFileContent;
+function renderLanguageFile(languageFile, languageFileContent) {
   const fileExtension = languageFile.fileName.substring(languageFile.fileName.lastIndexOf('.') + 1);
-  const filePath = languageFile.path;
-  const stringifiedContent = JSON.stringify(newLanguageFileContent, null, 2);
+  const stringifiedContent = JSON.stringify(languageFileContent, null, 2);
 
   if (fileExtension === 'json') {
-    fs.writeFileSync(filePath, stringifiedContent);
+    return stringifiedContent;
   } else if (fileExtension === 'js') {
-    const jsFile = `module.exports = ${stringifiedContent}; \n`;
-    fs.writeFileSync(filePath, jsFile);
+    return `module.exports = ${stringifiedContent}; \n`;
   } else if (fileExtension === 'yaml' || fileExtension === 'yml') {
     // js-yaml folds lines at 80 columns by default, which turns a hand-written
     // one-line-per-key catalog into folded blocks on every write.
-    const yamlFile = yaml.dump(newLanguageFileContent, {
+    return yaml.dump(languageFileContent, {
       lineWidth: -1
     });
-    fs.writeFileSync(filePath, yamlFile);
   } else {
     throw new Error(`Language filetype of ${fileExtension} not supported.`);
   }
+}
+
+function writeLanguageFile(languageFile, languageFileContent, sort = false) {
+  const newLanguageFileContent = sort ? sortObjectKeys(languageFileContent) : languageFileContent;
+  fs.writeFileSync(languageFile.path, renderLanguageFile(languageFile, newLanguageFileContent));
 } // This is a convenience function for users implementing in their own projects, and isn't used internally
 
 
@@ -419,6 +429,17 @@ async function createI18NReport(options) {
   if (sort && !languageFilesWereWritten) {
     sortLanguageFiles(languageFiles);
     console.info('\nYour language files have been sorted alphabetically.');
+  } // Read from disk rather than from the objects parsed above: --add and --remove may have
+  // rewritten the files since. Running after the sort block also means a --sort run never
+  // reports itself, since it has just written the sorted files.
+
+
+  const unsortedFiles = findUnsortedLanguageFiles(readLanguageFiles(path.resolve(process.cwd(), languageFilesGlob)));
+
+  if (unsortedFiles.length) {
+    console.info('\nUnsorted Language Files'), console.table(unsortedFiles.map(fileName => ({
+      fileName
+    })));
   }
 
   if (ci && report.missingKeys.length) {
@@ -427,6 +448,10 @@ async function createI18NReport(options) {
 
   if (ci && report.unusedKeys.length) {
     throw new Error(`${report.unusedKeys.length} unused keys found.`);
+  }
+
+  if (ci && unsortedFiles.length) {
+    throw new Error(`${unsortedFiles.length} language file(s) are not sorted alphabetically. Run with --sort.`);
   }
 
   return report;
@@ -441,5 +466,5 @@ process.on('unhandledRejection', err => {
   process.exit(1);
 });
 
-export { DetectionType, createI18NReport, extractI18NItemsFromVueFiles, extractI18NLanguageFromLanguageFiles, extractI18NReport, initCommand, parseVueFiles, parselanguageFiles, readLanguageFiles, readVueFiles, removeUnusedFromLanguageFiles, resolveConfig, sortLanguageFiles, sortObjectKeys, writeMissingToLanguageFiles, writeReportToFile };
+export { DetectionType, createI18NReport, extractI18NItemsFromVueFiles, extractI18NLanguageFromLanguageFiles, extractI18NReport, findUnsortedLanguageFiles, initCommand, parseVueFiles, parselanguageFiles, readLanguageFiles, readVueFiles, removeUnusedFromLanguageFiles, resolveConfig, sortLanguageFiles, sortObjectKeys, writeMissingToLanguageFiles, writeReportToFile };
 //# sourceMappingURL=vue-i18n-extract.modern.mjs.map

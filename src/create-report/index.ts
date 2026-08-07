@@ -1,7 +1,7 @@
 import path from 'path';
 import { ReportOptions, I18NReport, DetectionType } from '../types';
 import { readVueFiles, extractI18NItemsFromVueFiles } from './vue-files';
-import { readLanguageFiles, extractI18NLanguageFromLanguageFiles, removeUnusedFromLanguageFiles, writeMissingToLanguageFiles, sortLanguageFiles } from './language-files';
+import { readLanguageFiles, extractI18NLanguageFromLanguageFiles, removeUnusedFromLanguageFiles, writeMissingToLanguageFiles, sortLanguageFiles, findUnsortedLanguageFiles } from './language-files';
 import { extractI18NReport,  writeReportToFile } from './report';
 import Dot from 'dot-object';
 
@@ -71,12 +71,25 @@ export async function createI18NReport (options: ReportOptions): Promise<I18NRep
     console.info('\nYour language files have been sorted alphabetically.');
   }
 
+  // Read from disk rather than from the objects parsed above: --add and --remove may have
+  // rewritten the files since. Running after the sort block also means a --sort run never
+  // reports itself, since it has just written the sorted files.
+  const unsortedFiles = findUnsortedLanguageFiles(readLanguageFiles(path.resolve(process.cwd(), languageFilesGlob)));
+
+  if (unsortedFiles.length) {
+    console.info('\nUnsorted Language Files'), console.table(unsortedFiles.map(fileName => ({ fileName })));
+  }
+
   if (ci && report.missingKeys.length) {
     throw new Error(`${report.missingKeys.length} missing keys found.`);
   }
 
   if (ci && report.unusedKeys.length) {
     throw new Error(`${report.unusedKeys.length} unused keys found.`);
+  }
+
+  if (ci && unsortedFiles.length) {
+    throw new Error(`${unsortedFiles.length} language file(s) are not sorted alphabetically. Run with --sort.`);
   }
 
   return report;

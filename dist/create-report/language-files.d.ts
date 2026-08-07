@@ -5,5 +5,6 @@ export declare function extractI18NLanguageFromLanguageFiles(languageFiles: Simp
 export declare function writeMissingToLanguageFiles(parsedLanguageFiles: SimpleFile[], missingKeys: I18NItem[], dot?: DotObject.Dot, noEmptyTranslation?: string, missingTranslationString?: string, sort?: boolean): void;
 export declare function removeUnusedFromLanguageFiles(parsedLanguageFiles: SimpleFile[], unusedKeys: I18NItem[], dot?: DotObject.Dot, sort?: boolean): void;
 export declare function sortLanguageFiles(parsedLanguageFiles: SimpleFile[]): void;
+export declare function findUnsortedLanguageFiles(parsedLanguageFiles: SimpleFile[]): string[];
 export declare function sortObjectKeys<T>(value: T): T;
 export declare function parselanguageFiles(languageFiles: string, dot?: DotObject.Dot): I18NLanguage;
